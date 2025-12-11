@@ -1,44 +1,41 @@
 <?php
-require_once 'db.php';
+require_once 'db.php'; // ← только подключение к БД, без HTML
+
 session_start();
-
 $isAuth = isset($_SESSION['user_id']);
-$message = '';
+$user_name = $_SESSION['user_name'] ?? '';
 
-// Обработка отзыва
+// Обработка отправки отзыва — ДО ЛЮБОГО ВЫВОДА
 if ($_POST['add_review'] ?? null) {
     $user_name = trim($_POST['user_name'] ?? '');
     $rating = (int)($_POST['rating'] ?? 0);
     $comment = trim($_POST['comment'] ?? '');
     $product_id = (int)($_POST['product_id'] ?? 0);
+    $user_id = $_SESSION['user_id'] ?? null;
 
-    // Если авторизован — подставляем имя из БД
-    if ($isAuth && empty($user_name)) {
+    // Если пользователь авторизован — возьми имя из БД
+    if ($user_id && empty($user_name)) {
         $stmt = $pdo->prepare("SELECT name FROM users WHERE id = ?");
-        $stmt->execute([$_SESSION['user_id']]);
+        $stmt->execute([$user_id]);
         $user = $stmt->fetch();
         if ($user) {
             $user_name = $user['name'];
         }
     }
 
+    // Обязательно: имя должно быть
     if ($user_name && $rating >= 1 && $rating <= 5 && $comment && $product_id) {
         $stmt = $pdo->prepare("INSERT INTO reviews (product_id, user_id, user_name, rating, comment) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([
-            $product_id,
-            $isAuth ? $_SESSION['user_id'] : null,
-            $user_name,
-            $rating,
-            $comment
-        ]);
-        // Обновляем страницу
-        header("Location: product.php?id=$product_id");
+        $stmt->execute([$product_id, $user_id, $user_name, $rating, $comment]);
+        // Перенаправляем без якоря — просто обновляем страницу
+        header('Location: product.php?id=' . $product_id);
         exit;
     } else {
-        $message = 'Заполните все поля.';
+        $message = 'Заполните все поля';
     }
 }
 
+// Теперь можно подключать шапку
 require_once 'header.php';
 
 // Остальной код без изменений...
@@ -187,34 +184,30 @@ function toggleAccordion() {
 }
 </script>
 
-             <!-- Кнопка "Добавить в корзину" -->
-<?php if ($product['stock'] > 0): ?>
-    <form action="cart.php" method="POST" style="margin-top: 30px;">
-        <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
-        <input type="hidden" name="quantity" value="1">
-        <input type="hidden" name="selected_color" value="<?= htmlspecialchars($firstColor['sizes'][0]['color_name']) ?>">
-       <?php if (!$isAccessory): ?>
-        <input type="hidden" name="selected_size" id="selected-size-input" value="<?= htmlspecialchars($firstColor['sizes'][0]['size_name']) ?>">
-    <?php endif; ?>
-        <button type="submit" name="action" value="add" class="btn" style="width: 100%; padding: 12px; font-size: 16px;">
-            ДОБАВИТЬ В КОРЗИНУ
-        </button>
-    </form>
-<?php else: ?>
-    <div style="margin-top: 30px; text-align: center;">
-        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 10px; font-weight: 600; color: #000;">
-            Нет в наличии
-        </div>
-        <button type="button" class="btn" style="width: 100%; padding: 12px; font-size: 16px; background: #ddd; color: #666; cursor: not-allowed;" disabled>
-            ДОБАВИТЬ В КОРЗИНУ
-        </button>
-    </div>
+                <!-- Кнопка "Добавить в корзину" -->
+<form action="cart.php" method="POST" style="margin-top: 30px;">
+    <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
+    <input type="hidden" name="quantity" value="1">
+    <input type="hidden" name="selected_color" value="<?= htmlspecialchars($firstColor['sizes'][0]['color_name']) ?>">
+   <?php if (!$isAccessory): ?>
+    <input type="hidden" name="selected_size" id="selected-size-input" value="<?= htmlspecialchars($firstColor['sizes'][0]['size_name']) ?>">
 <?php endif; ?>
+    <button type="submit" name="action" value="add" class="btn" style="width: 100%; padding: 12px; font-size: 16px;">
+        ДОБАВИТЬ В КОРЗИНУ
+    </button>
+</form>
+            </div>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin: 40px 0;">
+        <a href="catalog.php" style="color: #000; text-decoration: underline;">← Вернуться в каталог</a>
+    </div>
+</main>
 
 <!-- Отзывы -->
-<div class="reviews-section" style="margin-top: 60px; border-top: 1px solid #eee; padding-top: 40px; text-align: center;">
-    <h3 style="margin-bottom: 30px;">Отзывы покупателей</h3>
-
+<div style="margin-top: 60px; border-top: 1px solid #eee; padding-top: 40px;">
+    <h3 style="text-align: center; margin-bottom: 30px;">Отзывы покупателей</h3>
 
     <?php
     $stmt = $pdo->prepare("SELECT * FROM reviews WHERE product_id = ? ORDER BY created_at DESC");
@@ -222,20 +215,24 @@ function toggleAccordion() {
     $reviews = $stmt->fetchAll();
 
     if (!empty($reviews)): ?>
-        <div class="reviews-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; max-width: 1200px; margin: 0 auto; text-align: left;">
-           <?php foreach ($reviews as $review): ?>
-                <div class="review-item" style="background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: left;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px;">
+            <?php foreach ($reviews as $review): ?>
+                <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                    <!-- Имя -->
                     <div style="font-weight: 600; color: #000; margin-bottom: 8px;">
                         <?= htmlspecialchars($review['user_name']) ?>
                     </div>
+                    <!-- Рейтинг -->
                     <div style="margin-bottom: 10px;">
                         <?php for ($i = 1; $i <= 5; $i++): ?>
                             <span style="color: <?= $i <= $review['rating'] ? '#FFD700' : '#ddd' ?>; font-size: 20px;">★</span>
                         <?php endfor; ?>
                     </div>
+                    <!-- Отзыв -->
                     <p style="font-size: 16px; margin-bottom: 10px; line-height: 1.5;">
                         <?= nl2br(htmlspecialchars($review['comment'])) ?>
                     </p>
+                    <!-- Дата -->
                     <div style="font-size: 12px; color: #666;">
                         <?= date('d.m.Y', strtotime($review['created_at'])) ?>
                     </div>
@@ -249,71 +246,72 @@ function toggleAccordion() {
     <?php endif; ?>
 </div>
 
-<!-- Форма добавления отзыва -->
+   <!-- Форма добавления отзыва (только для авторизованных) -->
 <?php if ($isAuth): ?>
+      <div style="margin-top: 40px; background: #fff; padding: 30px; border: 1px solid #ddd; border-radius: 8px; width: 100%; max-width: 100%;">
+        <h4 style="margin-bottom: 20px;">Оставить отзыв</h4>
+        <form id="reviewForm" method="POST" style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+                <label>Ваше имя:</label><br>
+                <input type="text" name="user_name" value="<?= htmlspecialchars($_SESSION['user_name'] ?? 'Покупатель') ?>" required style="padding: 8px; width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
 
-<form id="reviewForm" method="POST" style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+                <label>Оценка:</label><br>
+                <div style="display: flex; gap: 5px; margin: 5px 0;" id="rating-stars">
+                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                        <input type="radio" name="rating" value="<?= $i ?>" id="star_<?= $product['id'] ?>_<?= $i ?>" style="display: none;" required>
+                        <label for="star_<?= $product['id'] ?>_<?= $i ?>" class="star-label" style="cursor: pointer; font-size: 20px; color: #ddd; transition: color 0.2s;">
+                            ★
+                        </label>
+                    <?php endfor; ?>
+                </div>
+            </div>
 
-    <div>
-        <label>Ваше имя:</label><br>
-        <input type="text" name="user_name" required style="padding:8px; width:100%;">
+            <div>
+                <label>Текст отзыва:</label><br>
+                <textarea name="comment" rows="4" required style="padding: 8px; width: 100%; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+            </div>
+
+            <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
+            <button type="submit" name="add_review" class="btn" style="padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 4px; align-self: start;">
+                Отправить отзыв
+            </button>
+        </form>
+
+        <div id="reviewMessage" style="margin-top: 10px; display: none;"></div>
     </div>
 
-    <div>
-        <label>Оценка:</label><br>
-        <div style="display: flex; gap: 5px; margin: 5px 0;">
-            <?php for ($i = 1; $i <= 5; $i++): ?>
-                <input type="radio" name="rating" value="<?= $i ?>" id="star_<?= $i ?>" style="display:none;" required>
-                <label for="star_<?= $i ?>" class="star-label" style="cursor:pointer; font-size:20px; color:#ddd;">★</label>
-            <?php endfor; ?>
-        </div>
-    </div>
+    <script>
+    document.getElementById('reviewForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
 
-    <div>
-        <label>Комментарий:</label><br>
-        <textarea name="comment" rows="4" required style="padding:8px; width:100%;"></textarea>
-    </div>
+        const response = await fetch('add_review.php', {
+            method: 'POST',
+            body: formData
+        });
 
-    <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
+        const result = await response.json();
+        const msg = document.getElementById('reviewMessage');
+        msg.style.display = 'block';
 
-    <button type="submit" class="btn">
-        Отправить отзыв
-    </button>
-
-    <div id="reviewMessage" style="margin-top: 10px; display: none;"></div>
-
-</form>
-
-<script>
-document.getElementById('reviewForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-
-    const response = await fetch('add_review.php', {
-        method: 'POST',
-        body: formData
+        if (result.success) {
+            msg.innerHTML = '<div style="color: green;">Отзыв добавлен!</div>';
+            msg.style.color = 'green';
+            // Добавляем отзыв в список сразу
+            setTimeout(() => {
+                location.reload(); // Просто обновляем страницу (надёжно!)
+            }, 1000);
+        } else {
+            msg.innerHTML = '<div style="color: red;">' + result.error + '</div>';
+        }
     });
-
-    const result = await response.json();
-    const msg = document.getElementById('reviewMessage');
-    msg.style.display = 'block';
-
-    if (result.success) {
-        msg.innerHTML = '<div style="color: green;">Отзыв добавлен!</div>';
-        msg.style.color = 'green';
-        setTimeout(() => location.reload(), 700);
-    } else {
-        msg.innerHTML = '<div style="color: red;">' + result.error + '</div>';
-    }
-});
-</script>
-
+    </script>
 <?php else: ?>
-
-<div style="margin-top: 40px; text-align: center; padding: 20px; background: #fff; border: 1px solid #ddd; border-radius: 8px;">
-    <p>Чтобы оставить отзыв, <a href="login.php" style="color: #000; text-decoration: underline;">войдите</a>.</p>
-</div>
-
+    <div style="margin-top: 40px; text-align: center; padding: 20px; background: #fff; border: 1px solid #ddd; border-radius: 8px;">
+        <p>Чтобы оставить отзыв, <a href="login.php" style="color: #000; text-decoration: underline;">войдите</a>.</p>
+    </div>
 <?php endif; ?>
 
              <!-- Модальное окно -->

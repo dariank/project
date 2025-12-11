@@ -15,6 +15,7 @@
 
         <div class="category-list">
             <a href="catalog.php?category=<?= urlencode('Новая коллекция') ?>">НОВАЯ КОЛЛЕКЦИЯ</a>
+            <a href="catalog.php">ВСЯ КОЛЛЕКЦИЯ</a> 
             <a href="clothing.php" class="active">ОДЕЖДА</a>
             <a href="catalog.php?category=<?= urlencode('Аксессуары') ?>">АКСЕССУАРЫ</a>
            <a href="sale.php" style="color: #ff4d4d;">РАСПРОДАЖА</a>
